@@ -11,7 +11,7 @@ import java.util.Stack;
 
 import java.util.StringTokenizer;
 import java.util.ArrayList;
-import java.util.function.BiFunction;
+import java.util.function.Function;
 import java.util.Optional;
 
 import javax.validation.constraints.NotNull;
@@ -53,28 +53,49 @@ class Arithmetic {
             return Resources.Translations.getString(message); 
         }
     }
+    
+    /** 
+     * Function that defines single operator function
+     * 
+     * @author Mateusz Bagiński (cziken58@gmail.com)
+     */
+    private interface ArithmeticOperation extends Function<Float[], Float> {};
 
     private enum Operator {
-        LEFT_BRACKET(0, '(', null),  
-        RIGHT_BRACKET(1, ')', null),
-        PLUS(1, '+', (b, a) -> a + b), 
-        MINUS(1, '-', (b, a) -> a - b), 
-        MUL(2, '*', (b, a) -> a * b), 
-        DIV(2, '/', (b, a) -> a / b), 
-        MOD(2, '%', (b, a) -> a % b);
-        
+        LEFT_BRACKET(0, '(', 0, null),  
+        RIGHT_BRACKET(1, ')', 0, null),
+        PLUS(1, '+', 2, (Float args[]) -> args[1] + args[0]), 
+        MINUS(1, '-', 2, (Float args[]) -> args[1] - args[0]), 
+        MUL(2, '*', 2, (Float args[]) -> args[1] * args[0]), 
+        DIV(2, '/', 2, (Float args[]) -> args[1] / args[0]), 
+        MOD(2, '%', 2, (Float args[]) -> args[1] % args[0]),
+        STRONG(3, '!', 1, (Float args[]) -> {
+            float n = 1;
+            for (int i = 1; i <= args[0]; i++)
+                n *= i;
+
+            return n;
+        });
+
         private final int value;
         private final char character;
-        private final BiFunction<Float, Float, Float> action;
-
-        private Operator(int value, char character, BiFunction<Float, Float, Float> action) {
+        private int argsCount;
+        private final ArithmeticOperation action;
+    
+        private Operator(
+                int value, 
+                char character,
+                int argsCount, 
+                ArithmeticOperation action) {
             this.value = value;
             this.character = character;
             this.action = action;
+            this.argsCount = argsCount;
         }
         
-        public BiFunction<Float, Float, Float> getAction() { return action; }
+        public ArithmeticOperation getAction() { return action; }
         public int getValue() { return value; }
+        public int getArgsCount() { return argsCount; }
         public char getChar() { return character; }
         
         /** 
@@ -241,7 +262,6 @@ class Arithmetic {
                     .toRPN(expression)
                     .split(" "))
             .stream()
-
             .filter((item) -> {
                 if (item.isEmpty())
                     return false;
@@ -249,13 +269,17 @@ class Arithmetic {
                 Operator op = Operator.find(item.charAt(0));
 
                 if (op != null) {
-                    if (stack.size() < 2)
+                    final int argsCount = op.getArgsCount();
+                    if (stack.size() < argsCount)
                         return true;
-        
+                    
+                    Float[] params = new Float[argsCount];
+                    for (int i = 0; i < params.length; ++i) 
+                        params[i] = stack.pop();
+
                     Float val = op
-                        .getAction().apply(
-                                stack.pop(),
-                                stack.pop());
+                        .getAction()
+                        .apply(params);
                     stack.push(val);
                 } else
                     stack.push(Float.parseFloat(item));
